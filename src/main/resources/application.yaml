@@ -1,0 +1,23 @@
+server:
+  port: 8086
+  servlet:
+    context-path: '/ConverzAI/Assignment/'
+security:
+  ignored: /**
+management:
+  endpoints:
+    web:
+      exposure:
+        include: '*'
+  info:
+    env:
+      enabled: true
+info:
+  application:
+    name: Car Service Application
+    description: An Application for Car Service (An Assignment By ConverzAI)
+    author: Akash Singh
+    version: '@project.version@'
+spring:
+  profiles:
+    active: dev
