@@ -25,28 +25,26 @@ public abstract class AbstractScheduleServiceImpl implements ScheduleService {
 
     @Override
     public List<TimePeriod> getAvailabilityInTime(long id, TimePeriod timePeriod) throws UsernameNotFoundException {
-        SortedSet<TimePeriod> appointmentSchedules = getSortedSchedule(id, timePeriod);
-        SortedSet<TimePeriod> mergeSortedSchedule = mergeSortedSchedule(appointmentSchedules);
-        List<TimePeriod> availabilityTimePeriods = new ArrayList<>();
-        availabilityTimePeriods.addAll(getAvailabilityFromMergeSortedSchedule(mergeSortedSchedule, timePeriod));
-        return availabilityTimePeriods;
+        List<TimePeriod> appointmentSchedules = getSortedSchedule(id, timePeriod);
+        List<TimePeriod> mergeSortedSchedule = mergeSortedSchedule(appointmentSchedules);
+        return getAvailabilityFromMergeSortedSchedule(mergeSortedSchedule, timePeriod);
     }
 
     public abstract List<Appointment> getAppointmentsFromIdAndTime(long id, TimePeriod timePeriod);
 
     private TimePeriod fillTimePeriodIfEmpty(TimePeriod timePeriod) throws InvalidTimeException {
-        if(Objects.isNull(timePeriod.getStart()) && Objects.isNull(timePeriod.getEnd())){
+        if(Objects.isNull(timePeriod.getStart())) {
             timePeriod.setStart(LocalDateTime.now());
-            timePeriod.setEnd(LocalDateTime.now().plusHours(24));
-        }
-        else if(Objects.nonNull(timePeriod.getStart()) && Objects.isNull(timePeriod.getEnd())){
-            timePeriod.setEnd(timePeriod.getStart().plusHours(24));
-        } else if(Objects.isNull(timePeriod.getStart()) && Objects.nonNull(timePeriod.getEnd())){
-            throw new InvalidTimeException("Please provide Both Start and End Time");
-        } else {
-            if(!timePeriod.getStart().isBefore(timePeriod.getEnd())){
+            if(Objects.nonNull(timePeriod.getEnd())){
+                throw new InvalidTimeException("Please provide Both Start and End Time");
+            }
+        } else{
+            if(Objects.nonNull(timePeriod.getEnd()) && !timePeriod.getStart().isBefore(timePeriod.getEnd())){
                 throw new InvalidTimeException("Start Time Should be Before End Time");
             }
+        }
+        if(Objects.isNull(timePeriod.getEnd())){
+           timePeriod.setEnd(timePeriod.getStart().plusHours(24));
         }
         return timePeriod;
     }
@@ -60,61 +58,68 @@ public abstract class AbstractScheduleServiceImpl implements ScheduleService {
         return getAppointmentsFromIdAndTime(id, timePeriod);
     }
 
-    private SortedSet<TimePeriod> getSortedSchedule(long operatorId, TimePeriod timePeriod) throws UsernameNotFoundException {
+    private List<TimePeriod> getSortedSchedule(long operatorId, TimePeriod timePeriod) throws UsernameNotFoundException {
         List<Appointment> appointments = getAppointments(operatorId, timePeriod);
+        List<TimePeriod> appointmentTimePeriods = new ArrayList<>();
         SortedSet<TimePeriod> sortedSchedule = new TreeSet<>();
         for(Appointment appointment: appointments){
             sortedSchedule.add(new TimePeriod(appointment.getStartTime(), appointment.getEndTime()));
         }
-        return sortedSchedule;
+        for(TimePeriod tp: sortedSchedule) {
+           appointmentTimePeriods.add(tp);
+        }
+        return appointmentTimePeriods;
     }
 
-    private SortedSet<TimePeriod> mergeSortedSchedule(SortedSet<TimePeriod> sortedSchedule) throws UsernameNotFoundException {
-        SortedSet<TimePeriod> mergedSortedSchedule = new TreeSet<>();
-        LocalDateTime start = null;
-        LocalDateTime end = null;
-        for(TimePeriod timePeriod: sortedSchedule) {
-            if(Objects.nonNull(end) && !(timePeriod.getStart().equals(end))){
-                mergedSortedSchedule.add(new TimePeriod(start, end));
-                start = timePeriod.getStart();
-            } else if(Objects.isNull(end)){
-                start = timePeriod.getStart();
+    private List<TimePeriod> mergeSortedSchedule(List<TimePeriod> sortedSchedule) throws UsernameNotFoundException {
+        List<TimePeriod> mergedSortedSchedule = new ArrayList<>();
+        if(sortedSchedule.size()>0) {
+            LocalDateTime start = sortedSchedule.get(0).getStart();
+            LocalDateTime end;
+            for (int i = 1; i < sortedSchedule.size(); i++) {
+                if (sortedSchedule.get(i).getStart().isAfter(sortedSchedule.get(i - 1).getEnd())) {
+                    end = sortedSchedule.get(i - 1).getEnd();
+                    mergedSortedSchedule.add(new TimePeriod(start, end));
+                    start = sortedSchedule.get(i).getStart();
+                }
             }
-            end = timePeriod.getEnd();
+            end = sortedSchedule.get(sortedSchedule.size() - 1).getEnd();
+            mergedSortedSchedule.add(new TimePeriod(start, end));
         }
-        mergedSortedSchedule.add(new TimePeriod(start, end));
         return mergedSortedSchedule;
     }
 
-    private SortedSet<TimePeriod> getAvailabilityFromMergeSortedSchedule(SortedSet<TimePeriod> mergeSortedSchedule, TimePeriod timePeriod) {
-        SortedSet<TimePeriod> sortedAvailableSchedule = new TreeSet<>();
-        LocalDateTime start = null;
-        LocalDateTime end = null;
-        for(TimePeriod tp: mergeSortedSchedule) {
-            if(!tp.getStart().isAfter(timePeriod.getStart())  && !tp.getEnd().isBefore(timePeriod.getEnd())){
-                return sortedAvailableSchedule;
-            } else if(!tp.getStart().isAfter(timePeriod.getStart())  && tp.getEnd().isBefore(timePeriod.getEnd())) {
-                start = tp.getEnd();
-            } else if(tp.getStart().isAfter(timePeriod.getStart())  && !tp.getEnd().isBefore(timePeriod.getEnd())){
-                if(Objects.isNull(start)){
-                    start = timePeriod.getStart();
-                }
-                end = tp.getStart();
-                sortedAvailableSchedule.add(new TimePeriod(start, end));
-                return sortedAvailableSchedule;
-            } else {
-                if(Objects.isNull(start)){
-                    start = timePeriod.getStart();
-                }
-                end = tp.getStart();
-                sortedAvailableSchedule.add(new TimePeriod(start, end));
-                start = tp.getEnd();
-            }
+    private List<TimePeriod> getAvailabilityFromMergeSortedSchedule(List<TimePeriod> mergeSortedSchedule, TimePeriod timePeriod) {
+        List<TimePeriod> sortedAvailableSchedule = new ArrayList<>();
+        if(mergeSortedSchedule.size()>0) {
+            return getAvailableTimePeriods(mergeSortedSchedule, timePeriod, sortedAvailableSchedule);
+        } else {
+            return Collections.singletonList(timePeriod);
         }
-        if(!end.isAfter(timePeriod.getEnd())){
+    }
+
+    private List<TimePeriod> getAvailableTimePeriods(List<TimePeriod> mergeSortedSchedule, TimePeriod timePeriod, List<TimePeriod> sortedAvailableSchedule) {
+        LocalDateTime start;
+        int startingIndex = 0;
+        if(!mergeSortedSchedule.get(0).getStart().isAfter(timePeriod.getStart())){
+            start = mergeSortedSchedule.get(0).getEnd();
+            startingIndex++;
+        } else {
+            start = timePeriod.getStart();
+        }
+        return getPendingTimePeriods(mergeSortedSchedule, timePeriod, sortedAvailableSchedule, start, startingIndex);
+    }
+
+    private List<TimePeriod> getPendingTimePeriods(List<TimePeriod> mergeSortedSchedule, TimePeriod timePeriod, List<TimePeriod> sortedAvailableSchedule, LocalDateTime start, int startingIndex) {
+        LocalDateTime end;
+        for(int i = startingIndex; i< mergeSortedSchedule.size(); i++){
+            end = mergeSortedSchedule.get(i).getStart();
+            sortedAvailableSchedule.add(new TimePeriod(start, end));
+            start = mergeSortedSchedule.get(i).getEnd();
+        }
+        if(start.isBefore(timePeriod.getEnd())){
             end = timePeriod.getEnd();
             sortedAvailableSchedule.add(new TimePeriod(start, end));
-            return sortedAvailableSchedule;
         }
         return sortedAvailableSchedule;
     }

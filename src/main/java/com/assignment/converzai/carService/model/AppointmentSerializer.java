@@ -6,7 +6,10 @@ import com.fasterxml.jackson.databind.SerializerProvider;
 import com.fasterxml.jackson.databind.ser.std.StdSerializer;
 
 import java.io.IOException;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 
 public class AppointmentSerializer extends StdSerializer<Appointment> {
 
@@ -20,10 +23,11 @@ public class AppointmentSerializer extends StdSerializer<Appointment> {
 
     @Override
     public void serialize(Appointment appointment, JsonGenerator gen, SerializerProvider provider) throws IOException {
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm");
         gen.writeStartObject();
         gen.writeNumberField("id", appointment.getId());
-        gen.writeNumberField("startTime", appointment.getStartTime().toInstant(ZoneOffset.UTC).toEpochMilli());
-        gen.writeNumberField("endTime", appointment.getEndTime().toInstant(ZoneOffset.UTC).toEpochMilli());
+        gen.writeStringField("startTime", appointment.getStartTime().format(formatter));
+        gen.writeStringField("endTime", appointment.getEndTime().format(formatter));
         gen.writeNumberField("customer", appointment.getCustomer().getId());
         gen.writeNumberField("operator", appointment.getOperator().getId());
         gen.writeStringField("url", "/ConverzAI/Assignment/appointments/" + appointment.getId() + "/get");

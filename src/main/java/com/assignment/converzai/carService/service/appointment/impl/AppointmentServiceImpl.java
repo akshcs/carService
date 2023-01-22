@@ -57,12 +57,7 @@ public class AppointmentServiceImpl implements AppointmentService {
 
     @Override
     public Appointment saveNewAppointment(CreateAppointmentDTO createAppointmentDTO) throws InvalidAppointmentException {
-        if(Objects.isNull(createAppointmentDTO.getEndTime())){
-            createAppointmentDTO.setEndTime(createAppointmentDTO.getStartTime().plusMinutes(60));
-        }
-        appointmentValidationService.validateDateTime(createAppointmentDTO);
-        Appointment appointment = new Appointment(createAppointmentDTO.getStartTime(), createAppointmentDTO.getEndTime(),
-                operatorService.getOperatorById(createAppointmentDTO.getId_operator()),  customerService.getCustomerById(createAppointmentDTO.getId_customer()));
+        Appointment appointment = createAppointmentFromCreateAppointmentDTO(createAppointmentDTO);
         try {
             appointmentValidationService.checkConflict(appointment);
         } catch (AppointmentConflictException ex){
@@ -73,6 +68,30 @@ public class AppointmentServiceImpl implements AppointmentService {
 
     @Override
     public Appointment updateAppointment(long appointmentId, UpdateAppointmentDTO updateAppointmentDTO) throws InvalidAppointmentException {
+        Appointment oldAppointment = updateAppointmentFromUpdateAppointmentDTO(appointmentId, updateAppointmentDTO);
+        try {
+            appointmentValidationService.checkConflict(oldAppointment);
+        } catch (AppointmentConflictException ex){
+            throw ex;
+        }
+        return appointmentRepository.save(oldAppointment);
+    }
+
+    private CreateAppointmentDTO updateEndTimeIfEmpty(CreateAppointmentDTO createAppointmentDTO){
+        if(Objects.isNull(createAppointmentDTO.getEndTime())){
+            createAppointmentDTO.setEndTime(createAppointmentDTO.getStartTime().plusMinutes(60));
+        }
+        return createAppointmentDTO;
+    }
+
+    private Appointment createAppointmentFromCreateAppointmentDTO(CreateAppointmentDTO createAppointmentDTO) throws InvalidAppointmentException {
+        createAppointmentDTO = updateEndTimeIfEmpty(createAppointmentDTO);
+        appointmentValidationService.validateDateTime(createAppointmentDTO);
+        return new Appointment(createAppointmentDTO.getStartTime(), createAppointmentDTO.getEndTime(),
+                operatorService.getOperatorById(createAppointmentDTO.getId_operator()),  customerService.getCustomerById(createAppointmentDTO.getId_customer()));
+    }
+
+    private Appointment updateAppointmentFromUpdateAppointmentDTO(long appointmentId, UpdateAppointmentDTO updateAppointmentDTO) throws InvalidAppointmentException {
         Appointment oldAppointment = appointmentValidationService.validateAppointment(appointmentId);
         appointmentValidationService.isAppointmentInPast(oldAppointment);
 
@@ -81,13 +100,7 @@ public class AppointmentServiceImpl implements AppointmentService {
 
         oldAppointment.update(updateAppointmentDTO.getStartTime(), updateAppointmentDTO.getEndTime(),
                 operatorService.getOperatorById(updateAppointmentDTO.getId_operator()),  customerService.getCustomerById(updateAppointmentDTO.getId_customer()));
-
-        try {
-            appointmentValidationService.checkConflict(oldAppointment);
-        } catch (AppointmentConflictException ex){
-            throw ex;
-        }
-        return appointmentRepository.save(oldAppointment);
+        return oldAppointment;
     }
 
     @Override
@@ -98,12 +111,21 @@ public class AppointmentServiceImpl implements AppointmentService {
     }
 
     private UpdateAppointmentDTO fillAppointmentDTOFromAppointment(UpdateAppointmentDTO updateAppointmentDTO, Appointment appointment) {
+        updateAppointmentDTO = fillTime(updateAppointmentDTO, appointment);
+        return fillUserDetails(updateAppointmentDTO, appointment);
+    }
+
+    private UpdateAppointmentDTO fillTime(UpdateAppointmentDTO updateAppointmentDTO, Appointment appointment){
         if(Objects.isNull(updateAppointmentDTO.getEndTime())){
             updateAppointmentDTO.setEndTime(appointment.getEndTime());
         }
         if(Objects.isNull(updateAppointmentDTO.getStartTime())){
             updateAppointmentDTO.setStartTime(appointment.getStartTime());
         }
+        return updateAppointmentDTO;
+    }
+
+    private UpdateAppointmentDTO fillUserDetails(UpdateAppointmentDTO updateAppointmentDTO, Appointment appointment){
         if(updateAppointmentDTO.getId_customer() == 0){
             updateAppointmentDTO.setId_customer(appointment.getCustomer().getId());
         }
